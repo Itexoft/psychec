@@ -1,9 +1,9 @@
 name: multi-rid-build
-on: [push, pull_request, workflow_dispatch]
+on: [pull_request, workflow_dispatch]
 
 env:
   PROJECT_NAME: psychec
-  BUILD_TARGETS: "psychecommon psychecfe"
+  BUILD_TARGETS: "psychecommon psychecfe cnip"
   BUILD_TESTING: OFF
   DEBUG_SYMBOLS: true
   CMAKE_BUILD_TYPE: Release
@@ -75,11 +75,12 @@ jobs:
           $out = "$(Get-Location)\artifacts"
           $dbg = if ($env:DEBUG_SYMBOLS -eq 'true') { '/Zi' } else { '' }
           $linker = if ($env:DEBUG_SYMBOLS -eq 'true') { '/DEBUG' } else { '' }
+          $defs   = '/D_CRT_DECLARE_NONSTDC_NAMES=1 /D_CRT_NONSTDC_NO_DEPRECATE=1 /D_CRT_SECURE_NO_WARNINGS=1 /Dpopen=_popen /Dpclose=_pclose'
           cmake -S . -B build/${{ matrix.arch }} -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -T ClangCL `
             -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} `
             -DCMAKE_CXX_STANDARD=${{ env.CMAKE_CXX_STANDARD }} -DCMAKE_CXX_STANDARD_REQUIRED=${{ env.CMAKE_CXX_STANDARD_REQUIRED }} `
-            -DCMAKE_C_FLAGS="/w /EHsc $dbg" `
-            -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }}" `
+            -DCMAKE_C_FLAGS="/w /EHsc $dbg $defs" `
+            -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }} $defs" `
             -DCMAKE_SHARED_LINKER_FLAGS="$linker" `
             -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="$out" `
             -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$out" `
