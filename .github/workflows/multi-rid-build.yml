@@ -13,7 +13,6 @@ env:
   CXX_FLAGS_COMMON: "-w -fexceptions"
   CMAKE_EXTRA_ARGS: ""
 
-jobs:
   windows:
     runs-on: windows-latest
     strategy:
@@ -33,7 +32,7 @@ jobs:
         run: |
           $triplet = ("${{ matrix.arch }}-windows").ToLower()
           vcpkg install dlfcn-win32 --triplet $triplet
-        
+          
           "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
           "VCPKG_TRIPLET=$triplet" | Out-File -FilePath $env:GITHUB_ENV -Append
           "VCPKG_INCLUDE=$env:VCPKG_INSTALLATION_ROOT\installed\$triplet\include" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -68,6 +67,8 @@ jobs:
               -DCMAKE_INCLUDE_PATH="$VCPKG_INCLUDE" \
               -DCMAKE_C_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.C_FLAGS_COMMON }} -I$VCPKG_INCLUDE" \
               -DCMAKE_CXX_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.CXX_FLAGS_COMMON }} -std=c++${{ env.CMAKE_CXX_STANDARD }} -I$VCPKG_INCLUDE" \
+              -DCMAKE_EXE_LINKER_FLAGS="/DEFAULTLIB:dlfcn-win32.lib" \
+              -DCMAKE_SHARED_LINKER_FLAGS="/DEFAULTLIB:dlfcn-win32.lib" \
               -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$(pwd)/artifacts \
               -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(pwd)/artifacts \
               -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(pwd)/artifacts \
@@ -92,7 +93,7 @@ jobs:
           $dbg = if ($env:DEBUG_SYMBOLS -eq 'true') { '/Zi' } else { '' }
           $linker = if ($env:DEBUG_SYMBOLS -eq 'true') { '/DEBUG' } else { '' }
           $defs = '/D_CRT_DECLARE_NONSTDC_NAMES=1 /D_CRT_NONSTDC_NO_DEPRECATE=1 /D_CRT_SECURE_NO_WARNINGS=1 /Dpopen=_popen /Dpclose=_pclose'
-        
+          
           cmake -S . -B build/${{ matrix.arch }} -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -T ClangCL `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} `
@@ -100,10 +101,11 @@ jobs:
             -DCMAKE_INCLUDE_PATH="$env:VCPKG_INCLUDE" `
             -DCMAKE_C_FLAGS="/w /EHsc $dbg $defs /I$env:VCPKG_INCLUDE" `
             -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }} $defs /I$env:VCPKG_INCLUDE" `
-            -DCMAKE_SHARED_LINKER_FLAGS="$linker" `
-            -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="$out" `
-            -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$out" `
-            -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY="$out" `
+            -DCMAKE_EXE_LINKER_FLAGS="/DEFAULTLIB:dlfcn-win32.lib" `
+            -DCMAKE_SHARED_LINKER_FLAGS="/DEFAULTLIB:dlfcn-win32.lib $linker" `
+            -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE="$out" `
+            -DCMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE="$out" `
+            -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE="$out" `
             -DBUILD_TESTING=${{ env.BUILD_TESTING }} `
             ${{ env.CMAKE_EXTRA_ARGS }}
 
