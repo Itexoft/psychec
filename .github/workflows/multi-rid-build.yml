@@ -13,6 +13,7 @@ env:
   CXX_FLAGS_COMMON: "-w -fexceptions"
   CMAKE_EXTRA_ARGS: ""
 
+jobs:
   windows:
     runs-on: windows-latest
     strategy:
