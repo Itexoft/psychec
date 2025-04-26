@@ -33,7 +33,7 @@ jobs:
         run: |
           $triplet = ("${{ matrix.arch }}-windows").ToLower()
           vcpkg install dlfcn-win32 --triplet $triplet
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - id: detect-mingw
         shell: pwsh
