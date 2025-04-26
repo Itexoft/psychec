@@ -61,6 +61,7 @@ jobs:
             mkdir -p artifacts
             cmake -S . -B build/mingw/${{ matrix.arch }} -G Ninja \
               -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake \
+              -DVCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET \
               -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
               -DCMAKE_C_COMPILER=clang \
               -DCMAKE_CXX_COMPILER=clang++ \
@@ -88,6 +89,13 @@ jobs:
             fi
           '
 
+      - name: check-lib-files
+        if: steps.detect-mingw.outputs.full == 'false'
+        shell: pwsh
+        run: |
+          Write-Host "Library files in VCPKG_LIB directory:"
+          Get-ChildItem -Path $env:VCPKG_LIB -Filter "*.lib" | Select-Object -ExpandProperty Name
+
       - name: configure-vs
         if: steps.detect-mingw.outputs.full == 'false'
         shell: pwsh
@@ -97,8 +105,17 @@ jobs:
           $linker = if ($env:DEBUG_SYMBOLS -eq 'true') { '/DEBUG' } else { '' }
           $defs = '/D_CRT_DECLARE_NONSTDC_NAMES=1 /D_CRT_NONSTDC_NO_DEPRECATE=1 /D_CRT_SECURE_NO_WARNINGS=1 /Dpopen=_popen /Dpclose=_pclose'
           
+          $dlfcnLib = "$env:VCPKG_LIB\dlfcn-win32.lib"
+          if (-not (Test-Path $dlfcnLib)) {
+            $dlfcnLib = (Get-ChildItem -Path $env:VCPKG_LIB -Filter "dlfcn*.lib" | Select-Object -First 1).FullName
+            if (-not $dlfcnLib) {
+              $dlfcnLib = (Get-ChildItem -Path $env:VCPKG_LIB -Filter "*.lib" | Select-Object -First 1).FullName
+            }
+          }
+          
           cmake -S . -B build/${{ matrix.arch }} -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -T ClangCL `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TRIPLET" `
             -DCMAKE_PREFIX_PATH="$env:VCPKG_INSTALLATION_ROOT\installed\$env:VCPKG_TRIPLET" `
             -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} `
             -DCMAKE_CXX_STANDARD=${{ env.CMAKE_CXX_STANDARD }} -DCMAKE_CXX_STANDARD_REQUIRED=${{ env.CMAKE_CXX_STANDARD_REQUIRED }} `
@@ -106,12 +123,13 @@ jobs:
             -DCMAKE_LIBRARY_PATH="$env:VCPKG_LIB" `
             -DCMAKE_C_FLAGS="/w /EHsc $dbg $defs /I$env:VCPKG_INCLUDE" `
             -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }} $defs /I$env:VCPKG_INCLUDE" `
-            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:$env:VCPKG_LIB dlfcn-win32.lib $linker" `
-            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:$env:VCPKG_LIB dlfcn-win32.lib $linker" `
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:$env:VCPKG_LIB $dlfcnLib $linker" `
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:$env:VCPKG_LIB $dlfcnLib $linker" `
             -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE="$out" `
             -DCMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE="$out" `
             -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE="$out" `
             -DBUILD_TESTING=${{ env.BUILD_TESTING }} `
+            -DVCPKG_APPLOCAL_DEPS=ON `
             ${{ env.CMAKE_EXTRA_ARGS }}
 
       - name: build-vs
