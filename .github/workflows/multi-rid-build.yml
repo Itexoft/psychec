@@ -3,7 +3,7 @@ on: [pull_request, workflow_dispatch]
 
 env:
   PROJECT_NAME: psychec
-  BUILD_TARGETS: "psychecommon psychecfe cnip"
+  BUILD_TARGETS: "cnip psychecommon psychecfe"
   BUILD_TESTING: OFF
   DEBUG_SYMBOLS: true
   CMAKE_BUILD_TYPE: Release
@@ -33,7 +33,10 @@ jobs:
         run: |
           $triplet = ("${{ matrix.arch }}-windows").ToLower()
           vcpkg install dlfcn-win32 --triplet $triplet
+        
           "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_TRIPLET=$triplet" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_INCLUDE=$env:VCPKG_INSTALLATION_ROOT\installed\$triplet\include" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - id: detect-mingw
         shell: pwsh
@@ -56,14 +59,15 @@ jobs:
             export PATH="$PATH:/c/Program Files/CMake/bin:/c/msys64/usr/bin:/c/msys64/mingw64/bin:/c/msys64/clang-arm64/bin:/c/msys64/ucrt64/bin"
             mkdir -p artifacts
             cmake -S . -B build/mingw/${{ matrix.arch }} -G Ninja \
-              -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" \
+              -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake \
               -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
               -DCMAKE_C_COMPILER=clang \
               -DCMAKE_CXX_COMPILER=clang++ \
               -DCMAKE_CXX_STANDARD=${{ env.CMAKE_CXX_STANDARD }} \
               -DCMAKE_CXX_STANDARD_REQUIRED=${{ env.CMAKE_CXX_STANDARD_REQUIRED }} \
-              -DCMAKE_C_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.C_FLAGS_COMMON }}" \
-              -DCMAKE_CXX_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.CXX_FLAGS_COMMON }} -std=c++${{ env.CMAKE_CXX_STANDARD }}" \
+              -DCMAKE_INCLUDE_PATH="$VCPKG_INCLUDE" \
+              -DCMAKE_C_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.C_FLAGS_COMMON }} -I$VCPKG_INCLUDE" \
+              -DCMAKE_CXX_FLAGS="$([ "${{ env.DEBUG_SYMBOLS }}" = "true" ] && echo "-g") ${{ env.CXX_FLAGS_COMMON }} -std=c++${{ env.CMAKE_CXX_STANDARD }} -I$VCPKG_INCLUDE" \
               -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$(pwd)/artifacts \
               -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(pwd)/artifacts \
               -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(pwd)/artifacts \
@@ -84,16 +88,18 @@ jobs:
         if: steps.detect-mingw.outputs.full == 'false'
         shell: pwsh
         run: |
-          $out    = "$(Get-Location)\artifacts"
-          $dbg    = if ($env:DEBUG_SYMBOLS -eq 'true') { '/Zi' } else { '' }
+          $out = "$(Get-Location)\artifacts"
+          $dbg = if ($env:DEBUG_SYMBOLS -eq 'true') { '/Zi' } else { '' }
           $linker = if ($env:DEBUG_SYMBOLS -eq 'true') { '/DEBUG' } else { '' }
-          $defs   = '/D_CRT_DECLARE_NONSTDC_NAMES=1 /D_CRT_NONSTDC_NO_DEPRECATE=1 /D_CRT_SECURE_NO_WARNINGS=1 /Dpopen=_popen /Dpclose=_pclose'
+          $defs = '/D_CRT_DECLARE_NONSTDC_NAMES=1 /D_CRT_NONSTDC_NO_DEPRECATE=1 /D_CRT_SECURE_NO_WARNINGS=1 /Dpopen=_popen /Dpclose=_pclose'
+        
           cmake -S . -B build/${{ matrix.arch }} -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -T ClangCL `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} `
             -DCMAKE_CXX_STANDARD=${{ env.CMAKE_CXX_STANDARD }} -DCMAKE_CXX_STANDARD_REQUIRED=${{ env.CMAKE_CXX_STANDARD_REQUIRED }} `
-            -DCMAKE_C_FLAGS="/w /EHsc $dbg $defs" `
-            -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }} $defs" `
+            -DCMAKE_INCLUDE_PATH="$env:VCPKG_INCLUDE" `
+            -DCMAKE_C_FLAGS="/w /EHsc $dbg $defs /I$env:VCPKG_INCLUDE" `
+            -DCMAKE_CXX_FLAGS="/w /EHsc $dbg /std:c++${{ env.CMAKE_CXX_STANDARD }} $defs /I$env:VCPKG_INCLUDE" `
             -DCMAKE_SHARED_LINKER_FLAGS="$linker" `
             -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="$out" `
             -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$out" `
