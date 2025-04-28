@@ -1,0 +1,13 @@
+name: build-artifacts
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: Itexoft/DevOpsKit/.github/workflows/cpp-multi-rid-build.yml@master
+    with:
+      project_name: psychec
+      build_targets: "cnip,psychecommon,psychecfe"
+      cmake_cxx_standard: "17"
